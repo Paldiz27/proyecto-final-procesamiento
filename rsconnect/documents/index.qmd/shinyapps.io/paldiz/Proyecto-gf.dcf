@@ -1,0 +1,14 @@
+name: Proyecto-gf
+title: Proyecto-gf
+username: paldiz
+account: paldiz
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12270871
+bundleId: 8820618
+url: https://paldiz.shinyapps.io/Proyecto-gf/
+version: 1
+quarto_version: 1.4.554
+quarto_engines: knitr
+asMultiple: FALSE
+asStatic: FALSE

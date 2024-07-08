@@ -35,16 +35,15 @@ Areas <-
   )
 
 
+Especies <-
+  read.csv("especies-anfibios.csv")
 
 Especies <-
-  st_read(
-    dsn = "especies-anfibios.csv",
-    options = c(
-      "X_POSSIBLE_NAMES=decimalLongitude",
-      "Y_POSSIBLE_NAMES=decimalLatitude"
-    ),
-    quiet = TRUE
+  Especies |>
+  rename(
+    categoria = iucnRedListCategory
   )
+
 
 
 
@@ -55,74 +54,273 @@ RegistrosB <-
       "X_POSSIBLE_NAMES=decimalLongitude",
       "Y_POSSIBLE_NAMES=decimalLatitude"
     ),
+    
     quiet = TRUE
   )
 
+st_crs(RegistrosB) <- 4326
+
+RegistrosB$month <- as.integer(RegistrosB$month)
+
+Registros_Union_Especies <-
+  left_join(
+    RegistrosB, Especies, by = "species"
+  )
+  
+
+
+anfibios_union_areas <-
+  st_join(
+    x = Registros_Union_Especies,
+    y = dplyr::select(Areas, nombre_ac),
+    join = st_within
+  )
 
 ```
-
-
 
 #  {.sidebar}
 
 ```{r}
-#| panel: sidebar
+
 lista_especies <- unique(RegistrosB$species)
 lista_especies <- sort(lista_especies)
 lista_especies <- c("Todas", lista_especies)
 
 selectInput(
   inputId = "especie",      
-  label = "Especie",
+  label = h3("Especie"),
   choices = lista_especies, 
   selected = "Todas"        
 )
 
 ```
 
-# Data
+```{r}
+
+lista_categoria <- unique(Registros_Union_Especies$categoria)
+lista_categoria <- sort(lista_categoria)
+lista_categoria <- c("Todas", lista_categoria)
+
+selectInput(
+  inputId = "categoria",      
+  label = h3("Categoria"),
+  choices = lista_categoria, 
+  selected = "Todas"        
+)
+```
 
 ```{r}
+
+lista_area <- unique(anfibios_union_areas$nombre_ac)
+lista_area <- sort(lista_area)
+lista_area <- c("Todas", lista_area)
+
+selectInput(
+  inputId = "area",      
+  label = h3("Area"),
+  choices = lista_area, 
+  selected = "Todas"        
+)
+```
+
+```{r}
+
+
+sliderInput(
+  inputId = "meses", 
+  label = h3("Mes"),
+  min = 1,
+  max = 12,
+  value = c(1, 12)
+  )
+  
+  
+```
+
+# Datos
+
+
+
+```{r}
+#| label: salida-tabla
+#| title: "Tabla de registros de presencia"
+
 dataTableOutput(
 	outputId =  "tabla"
 )
 ```
+
+# Mapa
+
+```{r}
+#| label: salida-Mapa
+#| title: "Mapa de registros de presencia y áreas de conservación"
+
+leafletOutput(
+  outputId = "mapa"
+)
+```
+
+# Grafico
+
+```{r}
+#| label: salida-grafico
+#| title: "Cantidad de registros de presencia por Area de Conservacion"
+
+
+
+plotlyOutput(
+	outputId =  "grafico" 
+)
+```
+
 
 ```{r}
 #| label: servidor
 #| context: server
 
 
-filtrar_felidos <- reactive({
+filtrar_anfibios <- reactive({
   
-  felidos_filtrados <- RegistrosB
+ 
+  anfibios_filtrados <- anfibios_union_areas
   
+  anfibios_filtrados <-
+      anfibios_filtrados |>
+    filter(month == input$meses)
   
   if (input$especie != "Todas") {
-    felidos_filtrados <-
-      felidos_filtrados |>
+    anfibios_filtrados <-
+      anfibios_filtrados |>
       filter(species == input$especie)
   }
+  
+  if (input$categoria != "Todas") {
+    anfibios_filtrados <-
+      anfibios_filtrados |>
+      filter(categoria == input$categoria)
+  }
+  
+  if (input$area != "Todas") {
+    anfibios_filtrados <-
+      anfibios_filtrados |>
+      filter(nombre_ac == input$area)
+  }
 
-  return(felidos_filtrados)
+  
+
+  return(anfibios_filtrados)
 }) 
 
 
 output$tabla <- renderDataTable({
 	
-  RegistrosB <- filtrar_felidos()
+  anfibios_union_areas <- filtrar_anfibios()
   
  
-  RegistrosB |>
+  anfibios_union_areas |>
     st_drop_geometry() |>
-    select(species) |>
+    select(species, categoria, nombre_ac, month, eventDate) |>
     datatable(
     	rownames = FALSE,
-      colnames = c("Especie"),
+      colnames = c("Especie", "Categoria", "Area de Conservacion", "Mes", "Fecha"),
       options = list(
       	pageLength = 10,
         language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
       )
     )
 })
+
+
+
+
+output$mapa <- renderLeaflet({
+  
+  registros <- filtrar_anfibios()
+  
+    leaflet() |>
+  setView(
+    lng = -84.19452,
+    lat = 9.572735,
+    zoom = 7) |>
+  addTiles(group = "Mapa general (OpenStreetMap)") |>
+  addProviderTiles(
+    providers$Esri.WorldImagery, 
+    group = "Imágenes satelitales (ESRI World Imagery)"
+ 
+  ) |>
+      addPolygons(
+    data = Areas,
+    fillColor = "red",
+    fillOpacity = 0.8,
+    color = "black",
+    stroke = TRUE,
+    weight = 1.0,
+    popup = paste(
+      paste("<strong>Área de conservación:</strong>", Areas$nombre_ac)
+    ) 
+      ) |> addCircleMarkers(
+      data = registros,
+      radius = 1.5,
+      color = "blue",
+      stroke = TRUE,
+      popup = paste(
+        paste0("<strong>Area de Conservacion</strong>: ", registros$nombre_ac),
+        paste0("<strong>Especie</strong>: ", registros$species),
+        paste0("<strong>Categoria</strong>: ", registros$categoria),
+        paste0("<strong>Fecha</strong>: ", registros$eventDate),
+        sep = '<br/>')
+    )|>
+ 
+  addLayersControl(
+    baseGroups = c(
+      "Mapa general (OpenStreetMap)", 
+      "Imágenes satelitales (ESRI World Imagery)"
+    )
+  ) 
+      
+  
+    
+  })
+output$grafico <- renderPlotly({
+  
+  registros <- filtrar_registros()
+
+grafico_ggplot2 <-
+    registros |>
+    st_drop_geometry() |>
+    group_by(species) |>
+    summarize(n = n()) |>
+    ggplot(aes(x = reorder(species, -n),
+               y = n)) +
+    geom_col() +
+    xlab("Especies") +
+    ylab("Cantidad de registros")
+  
+  ggplotly(grafico_ggplot2) |> config(locale = "es")
+  
+})
+
+
+output$grafico <- renderPlotly({
+  
+  registros <- filtrar_anfibios()
+  
+  grafico_ggplot2 <-
+    registros |>
+    st_drop_geometry() |>
+    group_by(nombre_ac) |>
+    summarize(n = n()) |>
+    ggplot(aes
+           (x = reorder(nombre_ac, -n), y = n)) +
+    geom_col() +
+    xlab("Area de Conservacion") +
+    ylab("Cantidad de registros")
+  
+  ggplotly(grafico_ggplot2) |> config(locale = "es")
+  
+})
 ```
+
+
+

@@ -5,11 +5,10 @@ account: paldiz
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 12270871
-bundleId: 8830741
+bundleId: 8835356
 url: https://paldiz.shinyapps.io/Proyecto-gf/
 version: 1
 quarto_version: 1.4.555
 quarto_engines: knitr
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: test.html|test_files
